@@ -1,49 +1,28 @@
 # distutils: language = c
 # cython: language_level=3, boundscheck=False, wraparound=False, cdivision=True, infer_types=True, c_string_encoding=ascii
-from cpython.mem cimport PyMem_Malloc, PyMem_Realloc, PyMem_Free
-from libc.string cimport strlen
+from cpython.mem cimport PyMem_Malloc,PyMem_Free
 from libc.stdlib cimport NULL
 from cpython.unicode cimport PyUnicode_FromStringAndSize
 
-cdef struct RawItem:
+cdef struct Entry:
     double value
-    char * start_of_string
-    Py_ssize_t size_of_string 
+    uint64 handle
 
-cdef class _Arena:
-    void * _pointer
-    cdef Py_ssize_t _capacity,_used
+cpdef get_seg_id(Entry* e)->uint32:
+    return <uint32> e.handle >>32
 
-    def __cinit__(self,Py_ssize_t size):
-        self._pointer = PyMem_Malloc(size)
-        if(self._pointer == NULL):
-            raise MemoryError("Could not allocate memoery for _pointer")
-
-        self._capacity = size
-        
-    cdef void* add_element(self,void* element,Py_ssize_t size) nogil:
-        pass
-
-    cdef void clear(self):
-        if self._pointer == NULL:
-            return
-        PyMem_Free(self._pointer)
-
-    def __dealloc__(self):
-        if self._pointer == NULL:
-            return 
-        PyMem_Free(self._pointer)
-        
+cpdef get_offset(Entry* e)->uint32:
+    return <uint32> e.handle & 0xFFFFFFFF
 
 cdef class Heap:
-    RawItem* lis
-    Arena _arena 
+    Entry* lis
     Py_ssize_t _size_of_heap, _occupied
 
-    def __cinit__(self,Py_ssize_t size_of_heap) except *:
-        self.lis = (RawItem *)PyMem_Malloc(size_of_heap*sizeof(RawItem))
+    def __cinit__(self,Py_ssize_t size_of_heap,Py_ssize_t max_size_of_string=1) except *:
+        self.lis = (Entry*) PyMem_Malloc(size_of_heap*sizeof(Entry))
         if self.lis == NULL:
             raise MemoryError("Could not allocate memory to Heap")
+
         self._size_of_heap = size_of_heap
         self._occupied = 0
 
@@ -54,10 +33,10 @@ cdef class Heap:
             right = left+1
             smallest = i
 
-            if left < self._occupied and self.lis[left].value < self.lis[smallest].value:
+            if left < i and self.lis[left].value < self.lis[smallest].value:
                 smallest = left
 
-            if right < self._occupied and self.lis[right].value < self.lis[smallest].value:
+            if  right < i and self.lis[right].value < self.lis[smallest].value:
                 smallest = right
 
             if smallest == i:
@@ -67,30 +46,25 @@ cdef class Heap:
             i = smallest
             
     cdef inline void swap(self,Py_ssize_t a, Py_ssize_t b)nogil:
-        cdef RawItem temp = self.lis[a]
+        cdef Entry temp = self.lis[a]
         self.lis[a] = self.lis[b] 
         self.lis[b] = temp
 
-    cdef void push(self,double new_val, char* new_string)nogil:
-        cdef RawItem item,parent
+    cdef void push(self,double new_val, uint64 handle)nogil:
+        cdef Entry item,parent
         cdef Py_ssize_t item_position, parent_position
+
         with gil:
-            if(self._occupied+1 >= self._size_of_heap):
+            if(self._occupied >= self._size_of_heap):
                 raise MemoryError("The heap is full")
             if new_val > 1 or new_val < 0:
                 raise ValueError("The value must be between 0 <= value <= 1")
 
-        self._occupied+=1
 
 
         item.value = new_val
-        item.size_of_string = strlen(new_string)
-        item.start_of_string = <char*>self._arena.add_element(<void*>new_string,item.size_of_string)
+        item.handle = handle 
         
-        if item.start_of_string == NULL:
-            with gil:
-                raise MemoryError("Problem in creating assigning new string to Arena")
-
         item_position = self._occupied 
         self.lis[item_position] = item
         self._occupied+=1
@@ -110,8 +84,8 @@ cdef class Heap:
         
             
 
-    cdef RawItem pop(self) nogil:
-        RawItem item
+    cdef Entry pop(self) nogil:
+        cdef Entry item
         if self._occupied == 0:
             with gil: raise IndexError("The heap is empty")
 
@@ -121,6 +95,7 @@ cdef class Heap:
         if self._occupied > 0:
             self.lis[0] = self.lis[self._occupied]
             self.heapify(0)
+
         return item
 
     cpdef Heap build_heap(self,array:list):
@@ -131,7 +106,7 @@ cdef class Heap:
         for item in array:
             val1 = item[0]
             val2 = item[1]
-            if isinstance(item[0],str) and isinstance(item[1],float):
+            if isinstance(item[0],uint64) and isinstance(item[1],float):
                 val1 = item[1]
                 val2 = item[0]
 
@@ -142,7 +117,7 @@ cdef class Heap:
 
     cdef inline void _heapify_max_self(self, Py_ssize_t n, Py_ssize_t i) nogil:
         cdef Py_ssize_t largest, l, r
-        cdef RawItem tmp
+        cdef Entry tmp
         while True:
             l = (i << 1) + 1
             r = l + 1
@@ -160,7 +135,7 @@ cdef class Heap:
         # same as your current heapify but with explicit n (not self._occupied),
         # so we can rebuild from arbitrary array states.
         cdef Py_ssize_t smallest, l, r
-        cdef RawItem tmp
+        cdef Entry tmp
         while True:
             l = (i << 1) + 1
             r = l + 1
@@ -175,14 +150,12 @@ cdef class Heap:
             i = smallest
 
     def get_n_largest(self, Py_ssize_t k, bint restore=True):
-        """
-        In-place, O(1) extra memory.
-        Temporarily builds a max-heap in self.lis[0:n], yields k largest (value, str),
-        then (optionally) restores the min-heap property.
+      #  In-place, O(1) extra memory.
+      #  Temporarily builds a max-heap in self.lis[0:n], yields k largest (value, str),
+      #  then (optionally) restores the min-heap property.
 
-        Note: This is NON-destructive to the multiset of items, but it mutates
-        the array order during iteration.
-        """
+      #  Note: This is NON-destructive to the multiset of items, but it mutates
+      #  the array order during iteration.
         cdef Py_ssize_t n = self._occupied
         if k < 0:
             raise ValueError("k must be non-negative")
@@ -200,7 +173,7 @@ cdef class Heap:
 
         # Pop max k times (classic heapsort step): swap root with end, shrink heap
         cdef Py_ssize_t m = n
-        cdef RawItem it
+        cdef Entry it
         cdef object py_s
         for _ in range(k):
             it = self.lis[0]
@@ -215,6 +188,7 @@ cdef class Heap:
                 py_s = PyUnicode_FromStringAndSize(it.start_of_string, it.size_of_string)
             else:
                 py_s = u""
+
             yield (it.value, py_s)
 
         # Optionally restore min-heap invariant over all n items
@@ -229,7 +203,7 @@ cdef class Heap:
         if self.lis == NULL:
             return
         PyMem_Free(self.lis)
-        self._arena.clear()
+        self.lis = NULL
     
 
 
@@ -258,15 +232,17 @@ cdef class HeapIter:
         self._i += 1
         return self._h._py_item(idx)
 
-cpdef void heappush(Heap* heap,item:(float,str)):
+cpdef heappush(Heap* heap,double value,uint64 handle):
+    heap.push(value,item)
+
+cpdef heappop(Heap* heap)->(float,int):
+    a:float,b:int = heap.pop()
+    return (a,b) 
+
+cpdef heappushpop(Heap* heap,double value ,uint64 handle):
+    heap.pop()
     heap.push(item)
 
-cpdef RawItem heappop(Heap* heap):
-    return heap.pop()
-
-cpdef RawItem heappushpop(Heap* heap):
-    pass
-
-cpdef RawItem* nlargest(Heap* heap,Py_ssize_t n):
-    pass  
+cpdef nlargest(Heap* heap,Py_ssize_t n)->[float,int]:
+    return heap.get_n_largest(n)
 
