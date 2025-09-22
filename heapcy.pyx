@@ -121,7 +121,7 @@ cdef class Heap:
             heap.push(val1,val2)
 
         return heap
-    cdef Entry_peek_element(self,Py_ssize_t k)nogil:
+    cdef Entry _peek_element(self,Py_ssize_t k)nogil:
         return self.lis[k]
 
     cdef inline void _heapify_max_self(self, Py_ssize_t n, Py_ssize_t i) nogil:
@@ -167,6 +167,7 @@ cdef class Heap:
       #  the array order during iteration.
         cdef Py_ssize_t i
         cdef Py_ssize_t n = self._occupied
+
         if k < 0:
             raise ValueError("k must be non-negative")
         if n == 0:
@@ -185,6 +186,7 @@ cdef class Heap:
         cdef Py_ssize_t m = n
         cdef Entry it
         cdef uint64_t py_s
+
         for _ in range(k):
             it = self.lis[0]
             m -= 1
@@ -220,8 +222,15 @@ cdef class Heap:
         PyMem_Free(self.lis)
         self.lis = NULL
 
-    def __sizeof__(self):
+    def __repr__(self)->str:
+        built_string = str([(self.lis[i])for i in range(self._occupied)])
+        return built_string
+
+    def __sizeof__(self)->int:
         return self._occupied
+
+    def __len__(self)->int:
+        return self.__sizeof__()
     
 
 
@@ -303,7 +312,6 @@ cpdef tuple heappeek(Heap heap,Py_ssize_t k=0):
     with nogil:
         e = heap._peek_element(k)
     return (e.value, e.offset)
-    return heap._peek_element(k)
 
 def string_generator(file_name: str, offsets: list[int], encoding: str = "ascii"):
     """Yield the first space-delimited token on the line starting at each byte offset."""
