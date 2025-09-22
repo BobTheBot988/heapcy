@@ -121,7 +121,7 @@ cdef class Heap:
             heap.push(val1,val2)
 
         return heap
-    cdef tuple _peek_first_element(self,Py_ssize_t k)nogil:
+    cdef Entry_peek_element(self,Py_ssize_t k)nogil:
         return self.lis[k]
 
     cdef inline void _heapify_max_self(self, Py_ssize_t n, Py_ssize_t i) nogil:
@@ -293,10 +293,16 @@ cpdef object nlargest(Heap heap,Py_ssize_t k):
     return a tuple(float,int)
     """
     return heap.get_n_largest(k)
+
 cpdef tuple heappeek(Heap heap,Py_ssize_t k=0):
-    """
-    Peeks the first element of the heap
-    """
+    """Peek at element at index k (0 = root/min)."""
+    if k < 0 or k >= heap._occupied:
+        raise IndexError("index out of range")
+
+    cdef Entry e
+    with nogil:
+        e = heap._peek_element(k)
+    return (e.value, e.offset)
     return heap._peek_element(k)
 
 def string_generator(file_name: str, offsets: list[int], encoding: str = "ascii"):
