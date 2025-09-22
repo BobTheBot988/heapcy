@@ -1,30 +1,25 @@
 # distutils: language = c
 # cython: language_level=3, boundscheck=False, wraparound=False, cdivision=True, infer_types=True, c_string_encoding=ascii
 from cpython.mem cimport PyMem_Malloc,PyMem_Free
+from libc.stdint cimport uint64_t
 from libc.stdlib cimport NULL
-from cpython.unicode cimport PyUnicode_FromStringAndSize
 
 cdef struct Entry:
     double value
-    uint64 handle
-
-cpdef get_seg_id(Entry* e)->uint32:
-    return <uint32> e.handle >>32
-
-cpdef get_offset(Entry* e)->uint32:
-    return <uint32> e.handle & 0xFFFFFFFF
+    uint64_t offset
 
 cdef class Heap:
     Entry* lis
-    Py_ssize_t _size_of_heap, _occupied
+    Py_ssize_t _size_of_heap, _occupied,_modcount
 
-    def __cinit__(self,Py_ssize_t size_of_heap,Py_ssize_t max_size_of_string=1) except *:
+    def __cinit__(self,Py_ssize_t size_of_heap) except *:
         self.lis = (Entry*) PyMem_Malloc(size_of_heap*sizeof(Entry))
         if self.lis == NULL:
             raise MemoryError("Could not allocate memory to Heap")
 
         self._size_of_heap = size_of_heap
         self._occupied = 0
+        self._modcount = 0
 
     cdef void heapify(self,Py_ssize_t i) nogil:
         cdef  Py_ssize_t smallest,left,right
@@ -33,10 +28,10 @@ cdef class Heap:
             right = left+1
             smallest = i
 
-            if left < i and self.lis[left].value < self.lis[smallest].value:
+            if left < self._occupied and self.lis[left].value < self.lis[smallest].value:
                 smallest = left
 
-            if  right < i and self.lis[right].value < self.lis[smallest].value:
+            if  right < self._occupied and self.lis[right].value < self.lis[smallest].value:
                 smallest = right
 
             if smallest == i:
@@ -50,7 +45,7 @@ cdef class Heap:
         self.lis[a] = self.lis[b] 
         self.lis[b] = temp
 
-    cdef void push(self,double new_val, uint64 handle)nogil:
+    cdef void push(self,double new_val, uint64_t offset)nogil:
         cdef Entry item,parent
         cdef Py_ssize_t item_position, parent_position
 
@@ -63,7 +58,7 @@ cdef class Heap:
 
 
         item.value = new_val
-        item.handle = handle 
+        item.offset = offset 
         
         item_position = self._occupied 
         self.lis[item_position] = item
@@ -82,31 +77,36 @@ cdef class Heap:
             self.swap(item_position, parent_position)
             item_position = parent_position
         
-            
+        self._modcount+=1
 
     cdef Entry pop(self) nogil:
         cdef Entry item
+        cdef Py_ssize_t last
+
         if self._occupied == 0:
             with gil: raise IndexError("The heap is empty")
-
+    
         item = self.lis[0]
-        self.lis[0] = self.lis[self._occupied]
-        self._occupied-=1
+        last = self._occupied - 1
+        self._occupied -= 1
+
         if self._occupied > 0:
-            self.lis[0] = self.lis[self._occupied]
+            self.lis[0] = self.lis[last]
             self.heapify(0)
 
-        return item
+        self._modcount += 1
 
+        return item
+    
     cpdef Heap build_heap(self,array:list):
         Heap heap = Heap(len(array))
         double val1
-        char * val2 
+        uint64_t val2 
 
         for item in array:
             val1 = item[0]
             val2 = item[1]
-            if isinstance(item[0],uint64) and isinstance(item[1],float):
+            if isinstance(item[0],int) and isinstance(item[1],float):
                 val1 = item[1]
                 val2 = item[0]
 
@@ -174,7 +174,7 @@ cdef class Heap:
         # Pop max k times (classic heapsort step): swap root with end, shrink heap
         cdef Py_ssize_t m = n
         cdef Entry it
-        cdef object py_s
+        cdef uint64_t py_s
         for _ in range(k):
             it = self.lis[0]
             m -= 1
@@ -183,13 +183,8 @@ cdef class Heap:
                 with nogil:
                     _heapify_max_self(self, m, 0)
 
-            # convert to Python tuple (value, text)
-            if it.start_of_string != NULL and it.size_of_string >= 0:
-                py_s = PyUnicode_FromStringAndSize(it.start_of_string, it.size_of_string)
-            else:
-                py_s = u""
-
-            yield (it.value, py_s)
+            # convert to Python tuple (value, offset)
+            yield (it.value, it.offset)
 
         # Optionally restore min-heap invariant over all n items
         if restore:
@@ -198,6 +193,12 @@ cdef class Heap:
                 while i >= 0:
                     _heapify_min_self(self, n, i)
                     i -= 1
+
+    cdef _py_item(self,Py_ssize_t idx):
+     if idx < 0 or idx >= self._occupied:
+         raise IndexError
+     cdef Entry e = self.lis[idx]
+     return (e.value, e.offset)
 
     def __dealloc__(self):
         if self.lis == NULL:
@@ -226,23 +227,29 @@ cdef class HeapIter:
     def __next__(self):
         if self._expect_mod != self._h._modcount:
             raise RuntimeError("Heap mutated during iteration")
-        if self._i >= self._h._size_of_heap:
+        if self._i >= self._h._occupied:
             raise StopIteration()
         cdef Py_ssize_t idx = self._i
         self._i += 1
         return self._h._py_item(idx)
 
-cpdef heappush(Heap* heap,double value,uint64 handle):
-    heap.push(value,item)
+cpdef heappush(Heap heap,double value,uint64_t offset) :
+    with nogil:
+       heap.push(value,offset)
 
-cpdef heappop(Heap* heap)->(float,int):
-    a:float,b:int = heap.pop()
-    return (a,b) 
+cpdef tuple heappop(Heap heap):
+    cdef Entry e     
+    with nogil:
+        e = heap.pop()
+    return (e.value,e.offset) 
 
-cpdef heappushpop(Heap* heap,double value ,uint64 handle):
-    heap.pop()
-    heap.push(item)
+cpdef tuple heappushpop(Heap heap,double value ,uint64_t offset):
+    cdef Entry e 
+    with nogil:
+        e = heap.pop()
+        heap.push(value,offset)
+    return (e.value,e.offset)
 
-cpdef nlargest(Heap* heap,Py_ssize_t n)->[float,int]:
-    return heap.get_n_largest(n)
+cpdef object nlargest(Heap heap,Py_ssize_t k):
+    return heap.get_n_largest(k)
 
