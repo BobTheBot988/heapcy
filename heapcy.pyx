@@ -3,6 +3,8 @@
 
 from cpython.mem cimport PyMem_Malloc,PyMem_Free
 from libc.stdint cimport uint64_t
+from cpython.object cimport PyObject
+from cython cimport sizeof
 
 cdef struct Entry:
     double value
@@ -225,12 +227,31 @@ cdef class Heap:
     def __repr__(self)->str:
         built_string = str([(self.lis[i])for i in range(self._occupied)])
         return built_string
-
-    def __sizeof__(self)->int:
+    
+    def __len__(self):
+        """Number of items currently stored."""
         return self._occupied
-
-    def __len__(self)->int:
-        return self.__sizeof__()
+    
+    def nbytes_capacity(self):
+        """Bytes reserved for the backing array (capacity * sizeof(Entry))."""
+        return <size_t> self._size_of_heap * sizeof(Entry)
+    
+    def nbytes_used(self):
+        """Bytes actually used by current items (occupied * sizeof(Entry))."""
+        return <size_t> self._occupied * sizeof(Entry)
+    
+    def __sizeof__(self):
+        """
+        Bytes reported to sys.getsizeof(self):
+        - CPython header for this extension instance (tp_basicsize)
+        - plus malloc'ed buffer for entries (capacity * sizeof(Entry))
+        """
+        cdef size_t header = (<PyObject*> self).ob_type.tp_basicsize
+        cdef size_t buf = 0
+        if self.lis != NULL:
+            buf = <size_t> self._size_of_heap * sizeof(Entry)
+        return header + buf
+        
     
 
 

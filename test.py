@@ -24,7 +24,6 @@ def function():
             parts = line.rstrip(b"\b\n").split(b" ", 1)
             if len(parts) != 2:
                 continue
-
             prob = float(parts[1].decode(encoding="ascii"))
             heapcy.heappush(my_heap, prob, offset)
 
