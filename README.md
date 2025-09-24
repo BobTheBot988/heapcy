@@ -4,7 +4,8 @@
 
 - [heapcy — Cython-accelerated heap utilities](#heapcy-cython-accelerated-heap-utilities)
   - [Features](#features)
-  - [Installation](#installation)
+  - [Build](#build)
+  - [Install](#install)
   - [Quick start](#quick-start)
   - [API reference](#api-reference)
     - [Class: `Heap(capacity: int)`](#class-heapcapacity-int)
@@ -40,13 +41,16 @@ Implemented in Cython for speed; exposes a Pythonic API similar to `heapq`.
 
 ---
 
-## Installation
+## Build
 
 ```bash
-python -m pip install -U pip wheel
-python -m pip install .
-# or for dev
-python -m pip install -e .
+cibuildwheel .
+```
+
+## Install
+
+```bash
+pip install heapcy
 ```
 
 > You need a working C/C++ toolchain and Python headers for your interpreter.
