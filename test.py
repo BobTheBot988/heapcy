@@ -7,7 +7,7 @@ import heapcy
 
 def function():
     with tempfile.NamedTemporaryFile(delete=False) as tmpfile:
-        with gzip.open("total_guesses.gz") as fopen:
+        with gzip.open("example.gz") as fopen:
             shutil.copyfileobj(fopen, tmpfile)
             temp_file_name = tmpfile.name
 
@@ -30,8 +30,8 @@ def function():
     lis: list[int] = list()
     for tup in heapcy.nlargest(my_heap, 1000):
         lis.append(tup[1])
-    a = list(heapcy.string_generator(temp_file_name, lis))
-    __import__("pprint").pprint(a)
+    for el in heapcy.string_generator(temp_file_name, lis):
+        print(el)
     os.remove(temp_file_name)
 
 
