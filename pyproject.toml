@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "heapcy"
-version = "0.1.7"
+version = "0.1.8"
 description = "Cython-accelerated heap utilities"
 authors = [
   { name = "Roberto Di Rosa", email = "dirosa.2043388@studenti.uniroma1.it" },
