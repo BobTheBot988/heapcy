@@ -1,10 +1,10 @@
 [build-system]
-requires = ["setuptools>=61.0", "wheel", "cython>=3.0.0"]
+requires = ["setuptools>=75", "wheel", "Cython>=3.0"]
 build-backend = "setuptools.build_meta"
 
 [project]
 name = "heapcy"
-version = "0.1.6"
+version = "0.1.7"
 description = "Cython-accelerated heap utilities"
 authors = [
   { name = "Roberto Di Rosa", email = "dirosa.2043388@studenti.uniroma1.it" },
@@ -24,12 +24,19 @@ requires-python = ">=3.8"
 Homepage = "https://github.com/BobTheBot988/MAYA-Password-Benchmarking-cstruct"
 Issues = "https://github.com/BobTheBot988/MAYA-Password-Benchmarking-cstruct/issues"
 
-[tool.setuptools.package-dir]
-"" = "."
-
-# Build the Cython extension "heapcy" from heapcy.pyx
 [tool.setuptools]
-ext-modules = [{ name = "heapcy", sources = ["heapcy.pyx"] }]
+packages = ["heapcy"] # if you have a package layout
+include-package-data = true
+ext-modules = [
+  # package-as-extension (if your code is heapcy/__init__.pyx):
+  { name = "heapcy", sources = ["heapcy/__init__.pyx"] },
+
+  # OR submodule (if you use heapcy/_heapcy.pyx):
+  # { name = "heapcy._heapcy", sources = ["heapcy/_heapcy.pyx"] }
+]
+
+[tool.setuptools.package-data]
+heapcy = ["__init__.pyi", "py.typed"]
 
 # (Optional) Wheels across platforms via cibuildwheel
 [tool.cibuildwheel.windows]
