@@ -334,8 +334,18 @@ cpdef tuple heappeek(Heap heap,Py_ssize_t k=0):
         e = heap._peek_element(k)
     return (e.value, e.offset)
 
-def string_generator(file_name: str, offsets: list[int], encoding: str = "ascii"):
+def string_generator(file_name: str, offsets, encoding: str = "ascii"):
     """Yield the first space-delimited token on the line starting at each byte offset."""
+    """potential fix
+    if(len(offsets) == 0):
+        raise IndexError("Offsets must contain elements")
+    
+    if(len(offsets[0]) == 2) and isinstance(offsets[0],tuple) and isinstance(offsets[0][0],float) and isinstance(offsets[0][1],int):
+        tmp = []
+        for tup in offsets:
+            tmp.append(tup[1])
+        offsets = tmp
+    """
     with open(file_name, "rb") as f:
         for off in offsets:
             f.seek(off)                       # go to byte offset
@@ -347,6 +357,28 @@ def string_generator(file_name: str, offsets: list[int], encoding: str = "ascii"
             i = line.find(b" ")
             token = line[:i] if i != -1 else line.rstrip(b"\r\n")
             yield token.decode(encoding, errors="replace")
+def string_float_generator(file_name: str, offsets, encoding: str = "ascii"):
+    """Yield the first space-delimited token on the line starting at each byte offset."""
+    """potential fix
+    if(len(offsets) == 0):
+        raise IndexError("Offsets must contain elements")
+    
+    if(len(offsets[0]) == 2) and isinstance(offsets[0],tuple) and isinstance(offsets[0][0],float) and isinstance(offsets[0][1],int):
+        tmp = []
+        for tup in offsets:
+            tmp.append(tup[1])
+        offsets = tmp
+    """
+    with open(file_name, "rb") as f:
+        for off in offsets:
+            f.seek(off)                       # go to byte offset
+            line = f.readline()               # bytes to next b"\n" (or EOF)
+            if not line:
+                yield ""                      # offset past EOF
+                continue
+            
+            yield line.rstrip(b"\r\n").decode(encoding, errors="replace")
+
 
 def string_getter(name: str, offset: int, encoding: str = "ascii") -> str:
     """Return the first space-delimited token on the line starting at byte offset."""

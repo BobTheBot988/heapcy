@@ -30,8 +30,9 @@ def function():
     lis: list[int] = list()
     for tup in heapcy.nlargest(my_heap, 1000):
         lis.append(tup[1])
-    for el in heapcy.string_generator(temp_file_name, lis):
+    for el in heapcy.string_float_generator(temp_file_name, lis):
         print(el)
+
     os.remove(temp_file_name)
 
 

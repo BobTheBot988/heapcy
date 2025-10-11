@@ -1,0 +1,41 @@
+min_version = "2024.9.5"
+
+[env]
+# Use the project name derived from the current directory
+PROJECT_NAME = "{{ config_root | basename }}"
+
+# Automatic virtualenv activation
+_.python.venv = { path = ".venv", create = true }
+
+[settings]
+python.uv_venv_auto = true
+[tools]
+python = "3.12"
+ruff = "latest"
+
+[tasks.install]
+description = "Install dependencies"
+alias = "i"
+run = "uv pip install -r requirements.txt"
+
+[tasks.estimate]
+description = "Run the application"
+run = "python main.py --models fla --test_config config/test/rq1.yaml --n_samples 1000 --estimate_pwd 'ciao' --train_datasets rockyou --max_length 12 --overwrite 1"
+[tasks.generate]
+description = "Run the application"
+run = "python main.py --models fla --test_config config/test/rq1.yaml --train_datasets rockyou --max_length 12 --overwrite 1 --n_samples "
+
+[tasks.test]
+description = "Run tests"
+run = "pytest tests/"
+
+[tasks.lint]
+description = "Lint the code"
+run = "ruff src/"
+
+[tasks.info]
+description = "Print project information"
+run = '''
+echo "Project: $PROJECT_NAME"
+echo "Virtual Environment: $VIRTUAL_ENV"
+'''
