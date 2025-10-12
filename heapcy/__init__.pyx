@@ -376,8 +376,8 @@ def string_float_generator(file_name: str, offsets, encoding: str = "ascii"):
             if not line:
                 yield ""                      # offset past EOF
                 continue
-            
-            yield line.rstrip(b"\r\n").decode(encoding, errors="replace")
+            line = line.rstrip(b"\r\n").decode(encoding, errors="replace").split(" ")
+            yield (line[0],float(line[1]))
 
 
 def string_getter(name: str, offset: int, encoding: str = "ascii") -> str:
