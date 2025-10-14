@@ -13,7 +13,6 @@ def function():
 
     with open(temp_file_name, "rb") as f_open:
         my_heap = heapcy.Heap(100_000)
-
         while True:
             offset = f_open.tell()
             line = f_open.readline()
