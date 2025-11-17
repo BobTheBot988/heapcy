@@ -53,7 +53,7 @@ cibuildwheel .
 pip install heapcy
 ```
 
-> You need a working C/C++ toolchain and Python headers for your interpreter.
+> You may need a working C/C++ toolchain and Python headers for your interpreter.
 
 ---
 
